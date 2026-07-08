@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { LocalShipping, Scale, Outbox, Refresh, Add, Notes, Assignment } from '@mui/icons-material';
 import { omborchiChiqimAPI, omborchiChiqimArizalariAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useOmbor } from '../contexts/OmborContext';
+import { filterBySourceOmbor, getRecordOmborId } from '../utils/omborUtils';
 import DetailModal from '../components/common/DetailModal';
 import ViewDetailButton from '../components/common/ViewDetailButton';
 
@@ -15,7 +17,6 @@ const STATUS_FILTERS = [
 ];
 
 const emptyForm = {
-  omborId: '',
   product: '',
   truckNumber: '',
   recipientOmborId: '',
@@ -301,7 +302,7 @@ const ProductSelect = ({ products, value, onChange, disabled }) => {
 
 const Chiqimlar = () => {
   const { showSuccess, showError } = useSnackbar();
-  const [ombors, setOmbors] = useState([]);
+  const { selectedOmborId, selectedOmbor, ombors, hasOmbors, completeOmborSwitch } = useOmbor();
   const [omborProducts, setOmborProducts] = useState([]);
   const [omborNameLookup, setOmborNameLookup] = useState({});
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -337,10 +338,24 @@ const Chiqimlar = () => {
     return map;
   }, [arizalar]);
 
-  const displayedArizalar = useMemo(() => {
-    if (!arizaStatusFilter) return arizalar;
-    return arizalar.filter((item) => item.status === arizaStatusFilter);
-  }, [arizalar, arizaStatusFilter]);
+  const filteredChiqimlar = useMemo(
+    () => filterBySourceOmbor(chiqimlar, selectedOmborId),
+    [chiqimlar, selectedOmborId]
+  );
+
+  const filteredArizalar = useMemo(() => {
+    let list = arizalar;
+    if (selectedOmborId) {
+      list = list.filter((ariza) => {
+        const chiqim = typeof ariza.chiqim === 'object' ? ariza.chiqim : null;
+        return getRecordOmborId(chiqim) === String(selectedOmborId);
+      });
+    }
+    if (!arizaStatusFilter) return list;
+    return list.filter((item) => item.status === arizaStatusFilter);
+  }, [arizalar, arizaStatusFilter, selectedOmborId]);
+
+  const displayedArizalar = filteredArizalar;
 
   const loadOmborProducts = async (omborId) => {
     if (!omborId) {
@@ -381,22 +396,19 @@ const Chiqimlar = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [omborsRes, allOmborsRes, chiqimRes, arizalarRes] = await Promise.all([
-        omborchiChiqimAPI.getOmbors(),
+      const [allOmborsRes, chiqimRes, arizalarRes] = await Promise.all([
         omborchiChiqimAPI.getRecipientOmbors(),
         omborchiChiqimAPI.getMyChiqimlar(),
         omborchiChiqimArizalariAPI.getList(),
       ]);
-      const sourceOmbors = Array.isArray(omborsRes?.data) ? omborsRes.data : [];
       const allOmbors = Array.isArray(allOmborsRes?.data) ? allOmborsRes.data : [];
       const chiqimList = Array.isArray(chiqimRes?.data) ? chiqimRes.data : [];
 
-      setOmbors(sourceOmbors);
       setChiqimlar(chiqimList);
       setArizalar(Array.isArray(arizalarRes?.data) ? arizalarRes.data : []);
       setOmborNameLookup(
         buildOmborNameMap(
-          sourceOmbors,
+          ombors,
           allOmbors,
           chiqimList.map((item) => item.ombor),
           chiqimList.map((item) => item.recipientOmbor)
@@ -406,28 +418,30 @@ const Chiqimlar = () => {
       showError(error.message || "Ma'lumotlarni yuklab bo'lmadi");
     } finally {
       setLoading(false);
+      completeOmborSwitch();
     }
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedOmborId, ombors.length]);
 
   useEffect(() => {
-    if (isFormModalOpen && form.omborId) {
-      loadOmborProducts(form.omborId);
-      loadRecipientOmbors(form.omborId);
+    if (isFormModalOpen && selectedOmborId) {
+      loadOmborProducts(selectedOmborId);
+      loadRecipientOmbors(selectedOmborId);
     }
-  }, [isFormModalOpen, form.omborId]);
+  }, [isFormModalOpen, selectedOmborId]);
+
+  useEffect(() => {
+    if (!isFormModalOpen) return;
+    setForm(emptyForm);
+  }, [selectedOmborId]);
 
   const handleChange = (field, value) => {
     if (field === 'grossWeight' || field === 'tareWeight') {
       const sanitized = value.replace(/\D/g, '');
       setForm((prev) => ({ ...prev, [field]: sanitized }));
-      return;
-    }
-    if (field === 'omborId') {
-      setForm((prev) => ({ ...prev, omborId: value, product: '', recipientOmborId: '' }));
       return;
     }
     const normalizedValue = field === 'truckNumber' ? value.toUpperCase() : value;
@@ -442,8 +456,7 @@ const Chiqimlar = () => {
   };
 
   const openCreateModal = () => {
-    const defaultOmborId = ombors.length === 1 ? ombors[0]._id || ombors[0].id : '';
-    setForm({ ...emptyForm, omborId: defaultOmborId });
+    setForm(emptyForm);
     setIsFormModalOpen(true);
   };
 
@@ -499,8 +512,8 @@ const Chiqimlar = () => {
   const validateForm = () => {
     const gross = parseNumberValue(form.grossWeight);
     const tare = parseNumberValue(form.tareWeight);
-    if (!form.omborId || !form.product || !form.truckNumber.trim() || !form.recipientOmborId) {
-      showError("Manba ombor, mahsulot, mashina raqami va manzil ombor to'ldirilishi shart");
+    if (!selectedOmborId || !form.product || !form.truckNumber.trim() || !form.recipientOmborId) {
+      showError("Mahsulot, mashina raqami va manzil ombor to'ldirilishi shart");
       return false;
     }
     if (Number.isNaN(gross) || Number.isNaN(tare)) {
@@ -524,7 +537,7 @@ const Chiqimlar = () => {
     setSubmitting(true);
     try {
       await omborchiChiqimAPI.createChiqim({
-        omborId: form.omborId,
+        omborId: selectedOmborId,
         product: form.product,
         truckNumber: form.truckNumber.trim(),
         recipientOmborId: form.recipientOmborId,
@@ -567,8 +580,8 @@ const Chiqimlar = () => {
   };
 
   const canSubmitForm =
-    ombors.length > 0 &&
-    form.omborId &&
+    hasOmbors &&
+    selectedOmborId &&
     !loadingProducts &&
     !loadingRecipientOmbors &&
     omborProducts.length > 0 &&
@@ -609,15 +622,14 @@ const Chiqimlar = () => {
 
         {loading ? (
           <p className="text-sm text-slate-500">Yuklanmoqda...</p>
-        ) : chiqimlar.length === 0 ? (
-          <p className="text-sm text-slate-500">Hozircha chiqimlar mavjud emas.</p>
+        ) : filteredChiqimlar.length === 0 ? (
+          <p className="text-sm text-slate-500">Tanlangan omborda chiqimlar topilmadi.</p>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="w-full min-w-[44rem] text-sm">
               <thead>
                 <tr className="text-left border-b border-slate-200 text-slate-500">
                   <th className="py-2 pr-3">Sana</th>
-                  <th className="py-2 pr-3">Manba</th>
                   <th className="py-2 pr-3">Mahsulot</th>
                   <th className="py-2 pr-3">Manzil ombor</th>
                   <th className="py-2 pr-3">Net</th>
@@ -627,14 +639,13 @@ const Chiqimlar = () => {
                 </tr>
               </thead>
               <tbody>
-                {chiqimlar.map((item) => {
+                {filteredChiqimlar.map((item) => {
                   const chiqimId = getChiqimId(item);
                   const activeAriza = activeArizaByChiqimId[String(chiqimId)];
 
                   return (
                     <tr key={chiqimId} className="border-b border-slate-100 text-slate-700">
                       <td className="py-2 pr-3">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
-                      <td className="py-2 pr-3">{getManbaName(item)}</td>
                       <td className="py-2 pr-3">{item.product?.name || '-'}</td>
                       <td className="py-2 pr-3">{getManzilName(item)}</td>
                       <td className="py-2 pr-3 font-semibold">{formatWeight(item.netWeight)} kg</td>
@@ -750,31 +761,19 @@ const Chiqimlar = () => {
           <div className="w-full sm:max-w-3xl bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl border border-slate-200 p-4 sm:p-6 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-semibold text-slate-900">Yangi chiqim qo&apos;shish</h3>
             <p className="text-sm text-slate-500 mt-1">
-              Avval manba omborni tanlang, keyin mahsulot va manzil omborni belgilang.
+              {selectedOmbor?.name ? `${selectedOmbor.name} omboridan` : 'Tanlangan ombordan'} chiqim — mahsulot va manzil omborni belgilang.
             </p>
 
             <form onSubmit={handleSubmitForm} className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm text-slate-700 mb-2">Manba ombor</label>
-                <OmborSelect
-                  ombors={ombors}
-                  value={form.omborId}
-                  onChange={(omborId) => handleChange('omborId', omborId)}
-                />
-                {ombors.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-1">Sizga biriktirilgan omborlar topilmadi.</p>
-                )}
-              </div>
-
               <div>
                 <label className="block text-sm text-slate-700 mb-2">Mahsulot</label>
                 <ProductSelect
                   products={omborProducts}
                   value={form.product}
                   onChange={(productId) => handleChange('product', productId)}
-                  disabled={!form.omborId || loadingProducts}
+                  disabled={!selectedOmborId || loadingProducts}
                 />
-                {form.omborId && !loadingProducts && omborProducts.length === 0 && (
+                {selectedOmborId && !loadingProducts && omborProducts.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">Tanlangan omborda qoldig&apos;i bor mahsulot yo&apos;q.</p>
                 )}
                 {loadingProducts && (
@@ -803,11 +802,11 @@ const Chiqimlar = () => {
                   ombors={recipientOmbors}
                   value={form.recipientOmborId}
                   onChange={(omborId) => handleChange('recipientOmborId', omborId)}
-                  disabled={!form.omborId || loadingRecipientOmbors}
-                  placeholder={!form.omborId ? 'Avval manba omborni tanlang' : 'Manzil omborni tanlang'}
+                  disabled={!selectedOmborId || loadingRecipientOmbors}
+                  placeholder={!selectedOmborId ? 'Ombor tanlanmagan' : 'Manzil omborni tanlang'}
                   emptyText="Manzil ombor topilmadi"
                 />
-                {form.omborId && !loadingRecipientOmbors && recipientOmbors.length === 0 && (
+                {selectedOmborId && !loadingRecipientOmbors && recipientOmbors.length === 0 && (
                   <p className="text-xs text-amber-600 mt-1">Manzil omborlar topilmadi.</p>
                 )}
                 {loadingRecipientOmbors && (

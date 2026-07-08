@@ -3,6 +3,8 @@ import { motion } from 'framer-motion';
 import { LocalShipping, Scale, Inventory2, Refresh, Add, Assignment } from '@mui/icons-material';
 import { omborchiKirimAPI, omborchiKirimArizalariAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useOmbor } from '../contexts/OmborContext';
+import { filterBySourceOmbor, getRecordOmborId } from '../utils/omborUtils';
 import DetailModal from '../components/common/DetailModal';
 import ViewDetailButton from '../components/common/ViewDetailButton';
 
@@ -15,7 +17,6 @@ const STATUS_FILTERS = [
 ];
 
 const emptyForm = {
-  omborId: '',
   product: '',
   truckNumber: '',
   grossWeight: '',
@@ -155,93 +156,10 @@ const ProductSelect = ({ products, value, onChange }) => {
   );
 };
 
-const OmborSelect = ({ ombors, value, onChange }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const containerRef = useRef(null);
-
-  const filteredOmbors = useMemo(() => {
-    const query = search.trim().toLowerCase();
-    if (!query) return ombors;
-    return ombors.filter((item) => (item.name || '').toLowerCase().includes(query));
-  }, [ombors, search]);
-
-  const selectedOmbor = useMemo(
-    () => ombors.find((item) => (item._id || item.id) === value),
-    [ombors, value]
-  );
-
-  useEffect(() => {
-    const handleOutsideClick = (event) => {
-      if (containerRef.current && !containerRef.current.contains(event.target)) {
-        setIsOpen(false);
-      }
-    };
-
-    document.addEventListener('mousedown', handleOutsideClick);
-    return () => {
-      document.removeEventListener('mousedown', handleOutsideClick);
-    };
-  }, []);
-
-  const handleSelect = (omborId) => {
-    onChange(omborId);
-    setIsOpen(false);
-  };
-
-  return (
-    <div className="relative" ref={containerRef}>
-      <button
-        type="button"
-        onClick={() => setIsOpen((prev) => !prev)}
-        className="w-full rounded-xl border border-slate-200 px-3 py-3 bg-slate-50 text-slate-800 text-left"
-      >
-        {selectedOmbor?.name || 'Omborni tanlang'}
-      </button>
-
-      {isOpen && (
-        <div className="absolute z-30 mt-2 w-full rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-slate-100">
-            <input
-              type="text"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Qidirish..."
-              className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm outline-none focus:border-indigo-400"
-            />
-          </div>
-          <div className="max-h-56 overflow-y-auto py-1">
-            {filteredOmbors.length === 0 ? (
-              <p className="px-3 py-2 text-sm text-slate-500">Ombor topilmadi</p>
-            ) : (
-              filteredOmbors.map((item) => {
-                const omborId = item._id || item.id;
-                const isActive = omborId === value;
-                return (
-                  <button
-                    key={omborId}
-                    type="button"
-                    onClick={() => handleSelect(omborId)}
-                    className={`w-full px-3 py-2 text-left text-sm ${
-                      isActive ? 'bg-indigo-50 text-indigo-700' : 'text-slate-700 hover:bg-slate-50'
-                    }`}
-                  >
-                    {item.name}
-                  </button>
-                );
-              })
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
 const Kirimlar = () => {
   const { showSuccess, showError } = useSnackbar();
+  const { selectedOmborId, selectedOmbor, hasOmbors, completeOmborSwitch } = useOmbor();
   const [products, setProducts] = useState([]);
-  const [ombors, setOmbors] = useState([]);
   const [kirimlar, setKirimlar] = useState([]);
   const [arizalar, setArizalar] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -273,33 +191,49 @@ const Kirimlar = () => {
   }, [arizalar]);
 
   const displayedArizalar = useMemo(() => {
-    if (!arizaStatusFilter) return arizalar;
-    return arizalar.filter((item) => item.status === arizaStatusFilter);
-  }, [arizalar, arizaStatusFilter]);
+    let list = arizalar;
+    if (selectedOmborId) {
+      list = list.filter((ariza) => {
+        const kirim = typeof ariza.kirim === 'object' ? ariza.kirim : null;
+        return getRecordOmborId(kirim) === String(selectedOmborId);
+      });
+    }
+    if (!arizaStatusFilter) return list;
+    return list.filter((item) => item.status === arizaStatusFilter);
+  }, [arizalar, arizaStatusFilter, selectedOmborId]);
+
+  const filteredKirimlar = useMemo(
+    () => filterBySourceOmbor(kirimlar, selectedOmborId),
+    [kirimlar, selectedOmborId]
+  );
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [productsRes, omborsRes, myRes, arizalarRes] = await Promise.all([
+      const [productsRes, myRes, arizalarRes] = await Promise.all([
         omborchiKirimAPI.getProducts(),
-        omborchiKirimAPI.getOmbors(),
         omborchiKirimAPI.getMyKirimlar(),
         omborchiKirimArizalariAPI.getList(),
       ]);
       setProducts(Array.isArray(productsRes?.data) ? productsRes.data : []);
-      setOmbors(Array.isArray(omborsRes?.data) ? omborsRes.data : []);
       setKirimlar(Array.isArray(myRes?.data) ? myRes.data : []);
       setArizalar(Array.isArray(arizalarRes?.data) ? arizalarRes.data : []);
     } catch (error) {
       showError(error.message || "Ma'lumotlarni yuklab bo'lmadi");
     } finally {
       setLoading(false);
+      completeOmborSwitch();
     }
   };
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedOmborId]);
+
+  useEffect(() => {
+    if (!isFormModalOpen) return;
+    setForm(emptyForm);
+  }, [selectedOmborId]);
 
   const handleChange = (field, value) => {
     if (field === 'grossWeight' || field === 'tareWeight') {
@@ -317,8 +251,7 @@ const Kirimlar = () => {
   };
 
   const openCreateModal = () => {
-    const defaultOmborId = ombors.length === 1 ? ombors[0]._id || ombors[0].id : '';
-    setForm({ ...emptyForm, omborId: defaultOmborId });
+    setForm(emptyForm);
     setIsFormModalOpen(true);
   };
 
@@ -363,8 +296,8 @@ const Kirimlar = () => {
   const validateForm = () => {
     const gross = parseNumberValue(form.grossWeight);
     const tare = parseNumberValue(form.tareWeight);
-    if (!form.omborId || !form.product || !form.truckNumber.trim()) {
-      showError("Ombor, mahsulot va mashina raqami to'ldirilishi shart");
+    if (!selectedOmborId || !form.product || !form.truckNumber.trim()) {
+      showError("Mahsulot va mashina raqami to'ldirilishi shart");
       return false;
     }
     if (Number.isNaN(gross) || Number.isNaN(tare)) {
@@ -388,7 +321,7 @@ const Kirimlar = () => {
     setSubmitting(true);
     try {
       await omborchiKirimAPI.createKirim({
-        omborId: form.omborId,
+        omborId: selectedOmborId,
         product: form.product,
         truckNumber: form.truckNumber.trim(),
         grossWeight: parseNumberValue(form.grossWeight),
@@ -463,15 +396,14 @@ const Kirimlar = () => {
 
         {loading ? (
           <p className="text-sm text-slate-500">Yuklanmoqda...</p>
-        ) : kirimlar.length === 0 ? (
-          <p className="text-sm text-slate-500">Hozircha kirimlar mavjud emas.</p>
+        ) : filteredKirimlar.length === 0 ? (
+          <p className="text-sm text-slate-500">Tanlangan omborda kirimlar topilmadi.</p>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
-            <table className="w-full min-w-[40rem] text-sm">
+            <table className="w-full min-w-[36rem] text-sm">
               <thead>
                 <tr className="text-left border-b border-slate-200 text-slate-500">
                   <th className="py-2 pr-3">Sana</th>
-                  <th className="py-2 pr-3">Ombor</th>
                   <th className="py-2 pr-3">Mahsulot</th>
                   <th className="py-2 pr-3">Net</th>
                   <th className="py-2 pr-3">Ariza</th>
@@ -479,14 +411,13 @@ const Kirimlar = () => {
                 </tr>
               </thead>
               <tbody>
-                {kirimlar.map((item) => {
+                {filteredKirimlar.map((item) => {
                   const kirimId = getKirimId(item);
                   const activeAriza = activeArizaByKirimId[String(kirimId)];
 
                   return (
                     <tr key={kirimId} className="border-b border-slate-100 text-slate-700">
                       <td className="py-2 pr-3">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
-                      <td className="py-2 pr-3">{item.ombor?.name || '-'}</td>
                       <td className="py-2 pr-3">{item.product?.name || '-'}</td>
                       <td className="py-2 pr-3 font-semibold">{formatWeight(item.netWeight)} kg</td>
                       <td className="py-2 pr-3">
@@ -595,19 +526,11 @@ const Kirimlar = () => {
             <h3 className="text-lg font-semibold text-slate-900">Yangi kirim qo&apos;shish</h3>
             <p className="text-sm text-slate-500 mt-1">Barcha maydonlarni to&apos;ldiring, sof og&apos;irlik avtomatik ko&apos;rsatiladi.</p>
 
-            <form onSubmit={handleSubmitForm} className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="md:col-span-2">
-                <label className="block text-sm text-slate-700 mb-2">Ombor</label>
-                <OmborSelect
-                  ombors={ombors}
-                  value={form.omborId}
-                  onChange={(omborId) => handleChange('omborId', omborId)}
-                />
-                {ombors.length === 0 && (
-                  <p className="text-xs text-amber-600 mt-1">Sizga biriktirilgan omborlar topilmadi.</p>
-                )}
-              </div>
+            <p className="text-sm text-slate-500 mt-1">
+              {selectedOmbor?.name ? `${selectedOmbor.name} omboriga` : 'Tanlangan omborga'} kirim qo&apos;shish.
+            </p>
 
+            <form onSubmit={handleSubmitForm} className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm text-slate-700 mb-2">Mahsulot</label>
                 <ProductSelect
@@ -682,7 +605,7 @@ const Kirimlar = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || ombors.length === 0}
+                  disabled={submitting || !hasOmbors || !selectedOmborId}
                   className="px-5 py-3 rounded-xl bg-indigo-600 text-white font-medium hover:bg-indigo-700 disabled:bg-indigo-300"
                 >
                   {submitting ? 'Saqlanmoqda...' : 'Saqlash'}

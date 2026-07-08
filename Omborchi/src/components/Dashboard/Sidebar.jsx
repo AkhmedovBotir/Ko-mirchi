@@ -4,8 +4,6 @@ import {
   Outbox,
   Inbox,
   BarChart,
-  Warehouse,
-  Dashboard as DashboardIcon,
   Menu as MenuIcon,
   ChevronLeft,
   Close,
@@ -18,17 +16,14 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 const NAV_ITEMS = [
   {
-    path: '/dashboard',
-    label: 'Bosh sahifa',
-    icon: DashboardIcon,
-    isActive: (pathname) => pathname === '/dashboard' || pathname === '/dashboard/',
-  },
-  {
     path: '/dashboard/kirimlar',
     label: 'Kirimlar',
     icon: Inventory2,
     isActive: (pathname) =>
-      pathname.startsWith('/dashboard/kirimlar') && !pathname.startsWith('/dashboard/kelayotgan-kirimlar'),
+      pathname === '/dashboard' ||
+      pathname === '/dashboard/' ||
+      (pathname.startsWith('/dashboard/kirimlar') &&
+        !pathname.startsWith('/dashboard/kelayotgan-kirimlar')),
   },
   {
     path: '/dashboard/kelayotgan-kirimlar',
@@ -47,12 +42,6 @@ const NAV_ITEMS = [
     label: 'Statistika',
     icon: BarChart,
     isActive: (pathname) => pathname.startsWith('/dashboard/statistika'),
-  },
-  {
-    path: '/dashboard/omborlarim',
-    label: 'Omborlarim',
-    icon: Warehouse,
-    isActive: (pathname) => pathname.startsWith('/dashboard/omborlarim'),
   },
 ];
 

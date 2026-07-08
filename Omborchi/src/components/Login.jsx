@@ -24,7 +24,7 @@ const Login = () => {
 
   useEffect(() => {
     if (!authLoading && isAuthenticated) {
-      navigate('/dashboard');
+      navigate('/dashboard/kirimlar');
     }
   }, [isAuthenticated, authLoading, navigate]);
 
@@ -49,7 +49,7 @@ const Login = () => {
     
     if (result.success) {
       showSuccess('Muvaffaqiyatli kirildi');
-      navigate('/dashboard');
+      navigate('/dashboard/kirimlar');
     } else {
       const errorMsg = result.error || "Username yoki parol noto'g'ri";
       setError(errorMsg);

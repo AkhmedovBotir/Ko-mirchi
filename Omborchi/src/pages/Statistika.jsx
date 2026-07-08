@@ -14,15 +14,15 @@ import {
   ChevronRight,
 } from '@mui/icons-material';
 import {
-  authAPI,
   omborchiChiqimAPI,
   omborchiKirimAPI,
   omborchiStatistikaAPI,
 } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useOmbor } from '../contexts/OmborContext';
 import DetailModal from '../components/common/DetailModal';
 import ViewDetailButton from '../components/common/ViewDetailButton';
-import { formatTonFromKg, formatWeight, parseNumberValue } from '../utils/formatWeight';
+import { formatTonFromKg, formatWeight } from '../utils/formatWeight';
 
 const TYPE_FILTERS = [
   {
@@ -55,40 +55,13 @@ const TYPE_FILTERS = [
   },
 ];
 
-const STATUS_OPTIONS = [
-  { value: '', label: 'Barchasi' },
-  { value: 'pending', label: 'Kutilmoqda' },
-  { value: 'accepted', label: 'Qabul qilingan' },
-  { value: 'rejected', label: 'Bekor qilingan' },
-];
-
-const SORT_OPTIONS = [
-  { value: 'createdAt', label: 'Sana' },
-  { value: 'updatedAt', label: 'Yangilangan sana' },
-  { value: 'netWeight', label: 'Sof og\'irlik' },
-  { value: 'grossWeight', label: 'Yuk bilan og\'irlik' },
-  { value: 'tareWeight', label: 'Bo\'sh og\'irlik' },
-];
-
 const LIMIT_OPTIONS = ['20', '50', '100'];
 
 const emptyFilters = {
-  omborId: '',
   recipientOmborId: '',
   productId: '',
-  status: '',
-  truckNumber: '',
   from: '',
   to: '',
-  minNetWeight: '',
-  maxNetWeight: '',
-  minGrossWeight: '',
-  maxGrossWeight: '',
-  typesKirim: true,
-  typesChiqim: true,
-  typesQabul: true,
-  sortBy: 'createdAt',
-  sortOrder: 'desc',
   limit: '20',
 };
 
@@ -143,41 +116,19 @@ const getStatusLabel = (status) => {
   }
 };
 
-const buildRequestParams = (filters, page, typeFilter) => {
+const buildRequestParams = (filters, page) => {
   const params = {
     page,
     limit: filters.limit,
-    sortBy: filters.sortBy,
-    sortOrder: filters.sortOrder,
+    sortBy: 'createdAt',
+    sortOrder: 'desc',
     includeSummary: true,
   };
 
-  if (filters.omborId) params.omborId = filters.omborId;
   if (filters.recipientOmborId) params.recipientOmborId = filters.recipientOmborId;
   if (filters.productId) params.productId = filters.productId;
-  if (filters.status) params.status = filters.status;
-  if (filters.truckNumber.trim()) params.truckNumber = filters.truckNumber.trim();
   if (filters.from) params.from = filters.from;
   if (filters.to) params.to = filters.to;
-
-  const minNet = parseNumberValue(filters.minNetWeight);
-  if (!Number.isNaN(minNet)) params.minNetWeight = minNet;
-  const maxNet = parseNumberValue(filters.maxNetWeight);
-  if (!Number.isNaN(maxNet)) params.maxNetWeight = maxNet;
-  const minGross = parseNumberValue(filters.minGrossWeight);
-  if (!Number.isNaN(minGross)) params.minGrossWeight = minGross;
-  const maxGross = parseNumberValue(filters.maxGrossWeight);
-  if (!Number.isNaN(maxGross)) params.maxGrossWeight = maxGross;
-
-  if (typeFilter === 'all') {
-    const types = [];
-    if (filters.typesKirim) types.push('kirim');
-    if (filters.typesChiqim) types.push('chiqim');
-    if (filters.typesQabul) types.push('qabul');
-    if (types.length > 0 && types.length < 3) {
-      params.types = types.join(',');
-    }
-  }
 
   return params;
 };
@@ -238,6 +189,7 @@ const getOmborCellLabel = (item) => {
 
 const Statistika = () => {
   const { showError } = useSnackbar();
+  const { selectedOmborId, selectedOmbor, completeOmborSwitch } = useOmbor();
   const [typeFilter, setTypeFilter] = useState('all');
   const [filters, setFilters] = useState(emptyFilters);
   const [appliedFilters, setAppliedFilters] = useState(emptyFilters);
@@ -248,22 +200,17 @@ const Statistika = () => {
   const [loading, setLoading] = useState(true);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [detailItem, setDetailItem] = useState(null);
-  const [ombors, setOmbors] = useState([]);
   const [products, setProducts] = useState([]);
   const [recipientOmbors, setRecipientOmbors] = useState([]);
 
-  const showStatusFilter = typeFilter === 'all' || typeFilter === 'chiqimlar' || typeFilter === 'qabul-qilganlar';
   const showRecipientFilter = typeFilter === 'all' || typeFilter === 'chiqimlar';
-  const showTypesFilter = typeFilter === 'all';
 
   const loadReferenceData = async () => {
     try {
-      const [omborsRes, productsRes, recipientRes] = await Promise.all([
-        authAPI.getOmborchiOmbors(),
+      const [productsRes, recipientRes] = await Promise.all([
         omborchiKirimAPI.getProducts(),
         omborchiChiqimAPI.getRecipientOmbors(),
       ]);
-      setOmbors(Array.isArray(omborsRes?.data) ? omborsRes.data : []);
       setProducts(Array.isArray(productsRes?.data) ? productsRes.data : []);
       setRecipientOmbors(Array.isArray(recipientRes?.data) ? recipientRes.data : []);
     } catch {
@@ -275,7 +222,8 @@ const Statistika = () => {
     setLoading(true);
     try {
       const selected = TYPE_FILTERS.find((item) => item.value === tab) || TYPE_FILTERS[0];
-      const params = buildRequestParams(activeFilters, activePage, tab);
+      const params = buildRequestParams(activeFilters, activePage);
+      if (selectedOmborId) params.omborId = selectedOmborId;
       const response = await selected.loader(params);
 
       setItems(Array.isArray(response?.data) ? response.data : []);
@@ -293,6 +241,7 @@ const Statistika = () => {
       setPagination({ page: 1, limit: 20, total: 0, totalPages: 1 });
     } finally {
       setLoading(false);
+      completeOmborSwitch();
     }
   };
 
@@ -302,17 +251,13 @@ const Statistika = () => {
 
   useEffect(() => {
     loadData(typeFilter, appliedFilters, page);
-  }, [typeFilter, appliedFilters, page]);
+  }, [typeFilter, appliedFilters, page, selectedOmborId]);
 
   const handleFilterChange = (field, value) => {
     setFilters((prev) => ({ ...prev, [field]: value }));
   };
 
   const handleApplyFilters = () => {
-    if (typeFilter === 'all' && !filters.typesKirim && !filters.typesChiqim && !filters.typesQabul) {
-      showError('Kamida bitta amal turini tanlang');
-      return;
-    }
     setPage(1);
     setAppliedFilters({ ...filters });
   };
@@ -373,6 +318,11 @@ const Statistika = () => {
               <p className="text-sm text-slate-500 mt-1">
                 Kirimlar, chiqimlar va qabul qilingan transferlar bo&apos;yicha tarix, filter va og&apos;irlik
                 ko&apos;rsatkichlari.
+                {selectedOmbor && (
+                  <span className="block mt-1 text-indigo-600 font-medium">
+                    Ombor: {selectedOmbor.name}
+                  </span>
+                )}
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2 shrink-0 self-start w-full sm:w-auto">
@@ -423,24 +373,6 @@ const Statistika = () => {
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Ombor</label>
-                  <select
-                    value={filters.omborId}
-                    onChange={(e) => handleFilterChange('omborId', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="">Barchasi</option>
-                    {ombors.map((ombor) => {
-                      const id = ombor._id || ombor.id;
-                      return (
-                        <option key={id} value={id}>
-                          {ombor.name}
-                        </option>
-                      );
-                    })}
-                  </select>
-                </div>
-                <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Mahsulot</label>
                   <select
                     value={filters.productId}
@@ -480,100 +412,6 @@ const Statistika = () => {
                   </div>
                 )}
 
-                {showStatusFilter && (
-                  <div>
-                    <label className="block text-xs font-medium text-slate-600 mb-1.5">Holat</label>
-                    <select
-                      value={filters.status}
-                      onChange={(e) => handleFilterChange('status', e.target.value)}
-                      className={inputClass}
-                    >
-                      {STATUS_OPTIONS.map((option) => (
-                        <option key={option.value || 'all'} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                )}
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Mashina raqami</label>
-                  <input
-                    type="text"
-                    value={filters.truckNumber}
-                    onChange={(e) => handleFilterChange('truckNumber', e.target.value.toUpperCase())}
-                    placeholder="01 A 123 BC"
-                    className={`${inputClass} uppercase`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Min sof og&apos;irlik (kg)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={filters.minNetWeight}
-                    onChange={(e) => handleFilterChange('minNetWeight', e.target.value.replace(/\D/g, ''))}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Max sof og&apos;irlik (kg)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={filters.maxNetWeight}
-                    onChange={(e) => handleFilterChange('maxNetWeight', e.target.value.replace(/\D/g, ''))}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Min yuk og&apos;irligi (kg)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={filters.minGrossWeight}
-                    onChange={(e) => handleFilterChange('minGrossWeight', e.target.value.replace(/\D/g, ''))}
-                    className={inputClass}
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Max yuk og&apos;irligi (kg)</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={filters.maxGrossWeight}
-                    onChange={(e) => handleFilterChange('maxGrossWeight', e.target.value.replace(/\D/g, ''))}
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Saralash</label>
-                  <select
-                    value={filters.sortBy}
-                    onChange={(e) => handleFilterChange('sortBy', e.target.value)}
-                    className={inputClass}
-                  >
-                    {SORT_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-xs font-medium text-slate-600 mb-1.5">Tartib</label>
-                  <select
-                    value={filters.sortOrder}
-                    onChange={(e) => handleFilterChange('sortOrder', e.target.value)}
-                    className={inputClass}
-                  >
-                    <option value="desc">Kamayish</option>
-                    <option value="asc">O&apos;sish</option>
-                  </select>
-                </div>
                 <div>
                   <label className="block text-xs font-medium text-slate-600 mb-1.5">Har sahifada</label>
                   <select
@@ -589,41 +427,6 @@ const Statistika = () => {
                   </select>
                 </div>
               </div>
-
-              {showTypesFilter && (
-                <div>
-                  <p className="text-xs font-medium text-slate-600 mb-2">Amal turlari</p>
-                  <div className="flex flex-wrap gap-4">
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={filters.typesKirim}
-                        onChange={(e) => handleFilterChange('typesKirim', e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600"
-                      />
-                      Kirim
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={filters.typesChiqim}
-                        onChange={(e) => handleFilterChange('typesChiqim', e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600"
-                      />
-                      Chiqim
-                    </label>
-                    <label className="inline-flex items-center gap-2 text-sm text-slate-700">
-                      <input
-                        type="checkbox"
-                        checked={filters.typesQabul}
-                        onChange={(e) => handleFilterChange('typesQabul', e.target.checked)}
-                        className="rounded border-slate-300 text-indigo-600"
-                      />
-                      Qabul
-                    </label>
-                  </div>
-                </div>
-              )}
 
               <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
                 <button
@@ -693,59 +496,75 @@ const Statistika = () => {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
-          className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm"
+          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
         >
-          <p className="text-xs uppercase tracking-wide text-slate-500 font-semibold">Jami yozuvlar</p>
-          <p className="text-2xl font-bold text-slate-900 mt-2">{loading ? '—' : summaryStats.totalCount}</p>
+          <p className="text-[10px] sm:text-xs uppercase tracking-wide text-slate-500 font-semibold leading-tight">
+            Jami yozuvlar
+          </p>
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
+            {loading ? '—' : summaryStats.totalCount}
+          </p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm"
+          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
         >
-          <div className="flex items-center gap-2 text-emerald-600">
-            <TrendingUp sx={{ fontSize: 18 }} />
-            <p className="text-xs uppercase tracking-wide font-semibold">Kirim + qabul (net)</p>
+          <div className="flex items-center gap-1 sm:gap-2 text-emerald-600 min-w-0">
+            <TrendingUp sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+              Kirim + qabul (net)
+            </p>
           </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
             {loading ? '—' : `${formatTonFromKg(summaryStats.kirimKg)} t`}
           </p>
-          <p className="text-xs text-slate-500 mt-1">{loading ? '—' : `${formatWeight(summaryStats.kirimKg)} kg`}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+            {loading ? '—' : `${formatWeight(summaryStats.kirimKg)} kg`}
+          </p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.1 }}
-          className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm"
+          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
         >
-          <div className="flex items-center gap-2 text-indigo-600">
-            <TrendingDown sx={{ fontSize: 18 }} />
-            <p className="text-xs uppercase tracking-wide font-semibold">Chiqim (net)</p>
+          <div className="flex items-center gap-1 sm:gap-2 text-indigo-600 min-w-0">
+            <TrendingDown sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+              Chiqim (net)
+            </p>
           </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
             {loading ? '—' : `${formatTonFromKg(summaryStats.chiqimKg)} t`}
           </p>
-          <p className="text-xs text-slate-500 mt-1">{loading ? '—' : `${formatWeight(summaryStats.chiqimKg)} kg`}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+            {loading ? '—' : `${formatWeight(summaryStats.chiqimKg)} kg`}
+          </p>
         </motion.div>
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.15 }}
-          className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm"
+          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
         >
-          <div className="flex items-center gap-2 text-sky-600">
-            <SwapHoriz sx={{ fontSize: 18 }} />
-            <p className="text-xs uppercase tracking-wide font-semibold">Jami net og&apos;irlik</p>
+          <div className="flex items-center gap-1 sm:gap-2 text-sky-600 min-w-0">
+            <SwapHoriz sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+              Jami net og&apos;irlik
+            </p>
           </div>
-          <p className="text-2xl font-bold text-slate-900 mt-2">
+          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
             {loading ? '—' : `${formatTonFromKg(summaryStats.totalKg)} t`}
           </p>
-          <p className="text-xs text-slate-500 mt-1">{loading ? '—' : `${formatWeight(summaryStats.totalKg)} kg`}</p>
+          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+            {loading ? '—' : `${formatWeight(summaryStats.totalKg)} kg`}
+          </p>
         </motion.div>
       </div>
 

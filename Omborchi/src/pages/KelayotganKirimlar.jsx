@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import { Inbox, Refresh, CheckCircle, Cancel } from '@mui/icons-material';
 import { omborchiKelayotganKirimAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
+import { useOmbor } from '../contexts/OmborContext';
+import { filterByRecipientOmbor } from '../utils/omborUtils';
 import DetailModal from '../components/common/DetailModal';
 import ViewDetailButton from '../components/common/ViewDetailButton';
 
@@ -71,6 +73,7 @@ const getStatusLabel = (status) => {
 
 const KelayotganKirimlar = () => {
   const { showSuccess, showError } = useSnackbar();
+  const { selectedOmborId, selectedOmbor, completeOmborSwitch } = useOmbor();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -87,12 +90,18 @@ const KelayotganKirimlar = () => {
       showError(error.message || "Ma'lumotlarni yuklab bo'lmadi");
     } finally {
       setLoading(false);
+      completeOmborSwitch();
     }
   };
 
   useEffect(() => {
     loadData(statusFilter);
-  }, [statusFilter]);
+  }, [statusFilter, selectedOmborId]);
+
+  const filteredItems = useMemo(
+    () => filterByRecipientOmbor(items, selectedOmborId),
+    [items, selectedOmborId]
+  );
 
   const handleStatusChange = (status) => {
     setStatusFilter(status);
@@ -153,6 +162,11 @@ const KelayotganKirimlar = () => {
         <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Kelayotgan kirimlar</h2>
         <p className="text-sm text-slate-500 mt-1">
           Boshqa omborchilar sizga biriktirilgan omborga yuborgan chiqimlar shu yerda ko&apos;rinadi. Kutilmoqdagilarni qabul yoki bekor qilishingiz mumkin.
+          {selectedOmbor && (
+            <span className="block mt-1 text-indigo-600 font-medium">
+              Manzil ombor: {selectedOmbor.name}
+            </span>
+          )}
         </p>
         <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
           <div className="flex flex-wrap gap-2 w-full sm:w-auto">
@@ -194,8 +208,12 @@ const KelayotganKirimlar = () => {
 
         {loading ? (
           <p className="text-sm text-slate-500">Yuklanmoqda...</p>
-        ) : items.length === 0 ? (
-          <p className="text-sm text-slate-500">Kelayotgan kirimlar topilmadi.</p>
+        ) : filteredItems.length === 0 ? (
+          <p className="text-sm text-slate-500">
+            {items.length > 0
+              ? 'Tanlangan ombor uchun kelayotgan kirimlar topilmadi.'
+              : 'Kelayotgan kirimlar topilmadi.'}
+          </p>
         ) : (
           <div className="overflow-x-auto -mx-1 px-1 sm:mx-0 sm:px-0">
             <table className="w-full min-w-[48rem] text-sm">
@@ -211,7 +229,7 @@ const KelayotganKirimlar = () => {
                 </tr>
               </thead>
               <tbody>
-                {items.map((item) => (
+                {filteredItems.map((item) => (
                   <tr key={item._id || item.id} className="border-b border-slate-100 text-slate-700">
                     <td className="py-2 pr-3">{item.createdAt ? new Date(item.createdAt).toLocaleString() : '-'}</td>
                     <td className="py-2 pr-3">{formatOmborchiLabel(item.omborchi)}</td>

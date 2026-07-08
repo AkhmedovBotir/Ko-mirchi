@@ -152,16 +152,26 @@ const getStockByOmbor = async (omborchiId, ombors) => {
     return [];
   }
 
-  const [kirimRows, chiqimRows] = await Promise.all([
+  const [kirimRows, chiqimRows, incomingRows] = await Promise.all([
     aggregateGrouped(OmborchiKirim, { omborchi: omborchiOid, ombor: { $in: omborIds } }, "ombor"),
     aggregateGrouped(
       OmborchiChiqim,
       { omborchi: omborchiOid, ombor: { $in: omborIds }, status: { $ne: "rejected" } },
       "ombor"
+    ),
+    aggregateGrouped(
+      OmborchiChiqim,
+      { recipientOmbor: { $in: omborIds }, status: "accepted" },
+      "recipientOmbor"
     )
   ]);
 
   const balanceMap = mergeBalanceMaps(kirimRows, chiqimRows);
+
+  incomingRows.forEach((row) => {
+    const key = String(row._id);
+    balanceMap.set(key, (balanceMap.get(key) || 0) + row.total);
+  });
   const omborById = new Map(ombors.map((ombor) => [String(ombor._id || ombor), ombor]));
 
   return ombors.map((ombor) => {

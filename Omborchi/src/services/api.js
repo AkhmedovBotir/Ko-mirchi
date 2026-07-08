@@ -141,6 +141,10 @@ export const omborchiBalansAPI = {
   getBalans: async () => apiRequest('/omborchi-balans'),
 };
 
+export const omborchiDashboardAPI = {
+  getDashboard: async () => apiRequest('/omborchi-dashboard'),
+};
+
 const buildQueryString = (params = {}) => {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -149,10 +153,6 @@ const buildQueryString = (params = {}) => {
   });
   const query = searchParams.toString();
   return query ? `?${query}` : '';
-};
-
-export const omborchiDashboardAPI = {
-  getDashboard: async () => apiRequest('/omborchi-dashboard'),
 };
 
 export const omborchiStatistikaAPI = {

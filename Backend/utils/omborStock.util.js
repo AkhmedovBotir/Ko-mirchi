@@ -34,41 +34,52 @@ const getProductBalanceKg = async (omborchiId, omborId, productId, excludeChiqim
     chiqimMatch._id = { $ne: new mongoose.Types.ObjectId(excludeChiqimId) };
   }
 
-  const [kirimMap, chiqimMap] = await Promise.all([
+  const [kirimMap, chiqimMap, incomingMap] = await Promise.all([
     sumNetWeightByProduct(OmborchiKirim, {
       omborchi: omborchiOid,
       ombor: omborOid,
       product: productOid
     }),
-    sumNetWeightByProduct(OmborchiChiqim, chiqimMatch)
+    sumNetWeightByProduct(OmborchiChiqim, chiqimMatch),
+    sumNetWeightByProduct(OmborchiChiqim, {
+      recipientOmbor: omborOid,
+      product: productOid,
+      status: "accepted"
+    })
   ]);
 
   const kirimTotal = kirimMap.get(String(productOid)) || 0;
   const chiqimTotal = chiqimMap.get(String(productOid)) || 0;
+  const incomingTotal = incomingMap.get(String(productOid)) || 0;
 
-  return kirimTotal - chiqimTotal;
+  return kirimTotal - chiqimTotal + incomingTotal;
 };
 
 const getOmborProductBalances = async (omborchiId, omborId) => {
   const omborchiOid = new mongoose.Types.ObjectId(omborchiId);
   const omborOid = new mongoose.Types.ObjectId(omborId);
 
-  const [kirimMap, chiqimMap] = await Promise.all([
+  const [kirimMap, chiqimMap, incomingMap] = await Promise.all([
     sumNetWeightByProduct(OmborchiKirim, { omborchi: omborchiOid, ombor: omborOid }),
     sumNetWeightByProduct(OmborchiChiqim, {
       omborchi: omborchiOid,
       ombor: omborOid,
       status: { $ne: "rejected" }
+    }),
+    sumNetWeightByProduct(OmborchiChiqim, {
+      recipientOmbor: omborOid,
+      status: "accepted"
     })
   ]);
 
-  const productIds = new Set([...kirimMap.keys(), ...chiqimMap.keys()]);
+  const productIds = new Set([...kirimMap.keys(), ...chiqimMap.keys(), ...incomingMap.keys()]);
   const balances = [];
 
   for (const productId of productIds) {
     const kirimTotal = kirimMap.get(productId) || 0;
     const chiqimTotal = chiqimMap.get(productId) || 0;
-    const kg = kirimTotal - chiqimTotal;
+    const incomingTotal = incomingMap.get(productId) || 0;
+    const kg = kirimTotal - chiqimTotal + incomingTotal;
 
     if (kg > 0) {
       balances.push({
