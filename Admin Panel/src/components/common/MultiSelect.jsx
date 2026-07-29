@@ -109,7 +109,7 @@ const MultiSelect = ({
       </button>
 
       {isOpen && (
-        <div className="absolute z-40 mt-2 w-full min-w-[16rem] rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
+        <div className="absolute z-50 mt-2 w-full min-w-[16rem] rounded-xl border border-slate-200 bg-white shadow-lg overflow-hidden">
           {searchable && (
             <div className="p-2 border-b border-slate-100">
               <input

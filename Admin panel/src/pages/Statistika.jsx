@@ -576,9 +576,9 @@ const Statistika = () => {
         </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="bg-white border border-slate-200 rounded-2xl shadow-sm relative z-20">
         <div className="px-4 sm:px-5 py-4 flex flex-col lg:flex-row lg:items-end gap-3">
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 relative z-30">
             <label className="block text-xs font-medium text-slate-500 mb-1.5">
               Ombor bo&apos;yicha
             </label>
