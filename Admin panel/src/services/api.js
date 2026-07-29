@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://api.milliycrm.uz/api';
+import { API_BASE_URL } from '../config';
 
 const getToken = () => localStorage.getItem('adminToken');
 

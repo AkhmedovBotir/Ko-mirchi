@@ -224,6 +224,7 @@ const KelayotganKirimlar = () => {
                   <th className="py-2 pr-3">Manba</th>
                   <th className="py-2 pr-3">Manzil</th>
                   <th className="py-2 pr-3">Mahsulot</th>
+                  <th className="py-2 pr-3">Mashina raqami</th>
                   <th className="py-2 pr-3">Holat</th>
                   <th className="py-2 pr-3">Amallar</th>
                 </tr>
@@ -236,6 +237,7 @@ const KelayotganKirimlar = () => {
                     <td className="py-2 pr-3">{item.ombor?.name || '-'}</td>
                     <td className="py-2 pr-3">{item.recipientOmbor?.name || '-'}</td>
                     <td className="py-2 pr-3">{item.product?.name || '-'}</td>
+                    <td className="py-2 pr-3 font-medium">{item.truckNumber || '-'}</td>
                     <td className="py-2 pr-3">
                       <span
                         className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-medium border ${getStatusBadge(item.status)}`}

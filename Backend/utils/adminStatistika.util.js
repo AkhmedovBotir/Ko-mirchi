@@ -23,6 +23,47 @@ const parseObjectId = (value, fieldName) => {
   return new mongoose.Types.ObjectId(value);
 };
 
+const parseObjectIds = (value, fieldName) => {
+  if (value === undefined || value === null || value === "") {
+    return [];
+  }
+
+  const raw = Array.isArray(value)
+    ? value
+    : String(value)
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean);
+
+  if (!raw.length) {
+    return [];
+  }
+
+  const unique = [...new Set(raw.map((item) => String(item).trim()).filter(Boolean))];
+  return unique.map((id) => parseObjectId(id, fieldName));
+};
+
+const resolveOmborIds = (query) => {
+  const fromOmborIds = parseObjectIds(query.omborIds, "omborIds");
+  if (fromOmborIds.length) {
+    return fromOmborIds;
+  }
+
+  return parseObjectIds(query.omborId, "omborId");
+};
+
+const applyOmborMatch = (match, field, filters) => {
+  if (filters.omborIds?.length) {
+    match[field] =
+      filters.omborIds.length === 1 ? filters.omborIds[0] : { $in: filters.omborIds };
+    return;
+  }
+
+  if (filters.omborId) {
+    match[field] = filters.omborId;
+  }
+};
+
 const parseDate = (value, fieldName) => {
   if (!value) {
     return null;
@@ -107,11 +148,14 @@ const parseAdminStatistikaQuery = (query) => {
     throw new StatistikaQueryError(`status must be one of: ${CHIQIM_STATUSES.join(", ")}`);
   }
 
+  const omborIds = resolveOmborIds(query);
+
   return {
     omborchiId: parseObjectId(query.omborchiId, "omborchiId"),
     recipientOmborId: parseObjectId(query.recipientOmborId, "recipientOmborId"),
     senderOmborchiId: parseObjectId(query.senderOmborchiId, "senderOmborchiId"),
-    omborId: parseObjectId(query.omborId, "omborId"),
+    omborId: omborIds.length === 1 ? omborIds[0] : null,
+    omborIds,
     productId: parseObjectId(query.productId, "productId"),
     status,
     truckNumber: query.truckNumber ? String(query.truckNumber).trim() : null,
@@ -166,9 +210,7 @@ const buildKirimMatch = (filters) => {
     match.omborchi = filters.omborchiId;
   }
 
-  if (filters.omborId) {
-    match.ombor = filters.omborId;
-  }
+  applyOmborMatch(match, "ombor", filters);
 
   if (filters.productId) {
     match.product = filters.productId;
@@ -197,9 +239,7 @@ const buildChiqimMatch = (filters, { acceptedOnly = false } = {}) => {
     match.recipientOmbor = filters.recipientOmborId;
   }
 
-  if (filters.omborId) {
-    match.ombor = filters.omborId;
-  }
+  applyOmborMatch(match, "ombor", filters);
 
   if (filters.productId) {
     match.product = filters.productId;
@@ -225,10 +265,17 @@ const buildChiqimMatch = (filters, { acceptedOnly = false } = {}) => {
 const buildQabulMatch = (filters) => {
   const normalized = { ...filters };
 
-  if (normalized.omborId && !normalized.recipientOmborId) {
-    normalized.recipientOmborId = normalized.omborId;
+  if (!normalized.recipientOmborId) {
+    if (normalized.omborIds?.length === 1) {
+      normalized.recipientOmborId = normalized.omborIds[0];
+    } else if (normalized.omborIds?.length > 1) {
+      normalized.recipientOmborIds = normalized.omborIds;
+    } else if (normalized.omborId) {
+      normalized.recipientOmborId = normalized.omborId;
+    }
   }
   delete normalized.omborId;
+  delete normalized.omborIds;
 
   const match = buildChiqimMatch(
     {
@@ -260,6 +307,7 @@ const formatAdminFiltersResponse = (filters, scopeTypes) => ({
   recipientOmborId: filters.recipientOmborId,
   senderOmborchiId: filters.senderOmborchiId,
   omborId: filters.omborId,
+  omborIds: filters.omborIds || [],
   productId: filters.productId,
   status: filters.status,
   truckNumber: filters.truckNumber,
@@ -402,6 +450,7 @@ const buildPaginationMeta = (page, limit, total) => ({
 module.exports = {
   StatistikaQueryError,
   parseObjectId,
+  parseObjectIds,
   parseDate,
   parseNumber,
   parseBoolean,

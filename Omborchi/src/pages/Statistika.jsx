@@ -8,7 +8,6 @@ import {
   SwapHoriz,
   Inventory2,
   Outbox,
-  MoveToInbox,
   FilterList,
   ChevronLeft,
   ChevronRight,
@@ -45,13 +44,6 @@ const TYPE_FILTERS = [
     description: 'Boshqa omborlarga yuborilgan',
     icon: Outbox,
     loader: omborchiStatistikaAPI.getChiqimlar,
-  },
-  {
-    value: 'qabul-qilganlar',
-    label: 'Qabul qilganlar',
-    description: 'Kelgan transferlar',
-    icon: MoveToInbox,
-    loader: omborchiStatistikaAPI.getQabulQilganlar,
   },
 ];
 
@@ -316,7 +308,7 @@ const Statistika = () => {
             <div className="min-w-0">
               <h2 className="text-lg sm:text-xl font-semibold text-slate-900">Statistika</h2>
               <p className="text-sm text-slate-500 mt-1">
-                Kirimlar, chiqimlar va qabul qilingan transferlar bo&apos;yicha tarix, filter va og&apos;irlik
+                Kirimlar va chiqimlar bo&apos;yicha tarix, filter va og&apos;irlik
                 ko&apos;rsatkichlari.
                 {selectedOmbor && (
                   <span className="block mt-1 text-indigo-600 font-medium">
@@ -496,7 +488,11 @@ const Statistika = () => {
         </div>
       </motion.div>
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-4">
+      <div
+        className={`grid gap-2 sm:gap-4 ${
+          typeFilter === 'all' ? 'grid-cols-2 lg:grid-cols-4' : 'grid-cols-2'
+        }`}
+      >
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -509,63 +505,69 @@ const Statistika = () => {
             {loading ? '—' : summaryStats.totalCount}
           </p>
         </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.05 }}
-          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
-        >
-          <div className="flex items-center gap-1 sm:gap-2 text-emerald-600 min-w-0">
-            <TrendingUp sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
-            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
-              Kirim + qabul (net)
+        {(typeFilter === 'all' || typeFilter === 'kirimlar') && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.05 }}
+            className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
+          >
+            <div className="flex items-center gap-1 sm:gap-2 text-emerald-600 min-w-0">
+              <TrendingUp sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+                Kirim + qabul (net)
+              </p>
+            </div>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
+              {loading ? '—' : `${formatTonFromKg(summaryStats.kirimKg)} t`}
             </p>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
-            {loading ? '—' : `${formatTonFromKg(summaryStats.kirimKg)} t`}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
-            {loading ? '—' : `${formatWeight(summaryStats.kirimKg)} kg`}
-          </p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.1 }}
-          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
-        >
-          <div className="flex items-center gap-1 sm:gap-2 text-indigo-600 min-w-0">
-            <TrendingDown sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
-            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
-              Chiqim (net)
+            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+              {loading ? '—' : `${formatWeight(summaryStats.kirimKg)} kg`}
             </p>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
-            {loading ? '—' : `${formatTonFromKg(summaryStats.chiqimKg)} t`}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
-            {loading ? '—' : `${formatWeight(summaryStats.chiqimKg)} kg`}
-          </p>
-        </motion.div>
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.15 }}
-          className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
-        >
-          <div className="flex items-center gap-1 sm:gap-2 text-sky-600 min-w-0">
-            <SwapHoriz sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
-            <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
-              Jami net og&apos;irlik
+          </motion.div>
+        )}
+        {(typeFilter === 'all' || typeFilter === 'chiqimlar') && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.1 }}
+            className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
+          >
+            <div className="flex items-center gap-1 sm:gap-2 text-indigo-600 min-w-0">
+              <TrendingDown sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+                Chiqim (net)
+              </p>
+            </div>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
+              {loading ? '—' : `${formatTonFromKg(summaryStats.chiqimKg)} t`}
             </p>
-          </div>
-          <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
-            {loading ? '—' : `${formatTonFromKg(summaryStats.totalKg)} t`}
-          </p>
-          <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
-            {loading ? '—' : `${formatWeight(summaryStats.totalKg)} kg`}
-          </p>
-        </motion.div>
+            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+              {loading ? '—' : `${formatWeight(summaryStats.chiqimKg)} kg`}
+            </p>
+          </motion.div>
+        )}
+        {typeFilter === 'all' && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.15 }}
+            className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-5 shadow-sm min-w-0"
+          >
+            <div className="flex items-center gap-1 sm:gap-2 text-sky-600 min-w-0">
+              <SwapHoriz sx={{ fontSize: { xs: 16, sm: 18 } }} className="shrink-0" />
+              <p className="text-[10px] sm:text-xs uppercase tracking-wide font-semibold leading-tight truncate">
+                Jami net og&apos;irlik
+              </p>
+            </div>
+            <p className="text-xl sm:text-2xl font-bold text-slate-900 mt-1.5 sm:mt-2">
+              {loading ? '—' : `${formatTonFromKg(summaryStats.totalKg)} t`}
+            </p>
+            <p className="text-[10px] sm:text-xs text-slate-500 mt-0.5 sm:mt-1 truncate">
+              {loading ? '—' : `${formatWeight(summaryStats.totalKg)} kg`}
+            </p>
+          </motion.div>
+        )}
       </div>
 
       <motion.div

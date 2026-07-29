@@ -12,6 +12,7 @@ import {
 import { statistikaAPI, omborAPI, omborchiAPI, maxsulotAPI } from '../services/api';
 import { useSnackbar } from '../contexts/SnackbarContext';
 import CustomSelect from '../components/common/CustomSelect';
+import MultiSelect from '../components/common/MultiSelect';
 
 const TABS = [
   { id: 'all', label: 'Barchasi', fetch: statistikaAPI.getAll },
@@ -63,7 +64,7 @@ const buildFilterParams = (source, tab) => {
   if (source.omborchiId) params.omborchiId = source.omborchiId;
   if (source.senderOmborchiId) params.senderOmborchiId = source.senderOmborchiId;
   if (source.recipientOmborId) params.recipientOmborId = source.recipientOmborId;
-  if (source.omborId) params.omborId = source.omborId;
+  if (source.omborIds?.length) params.omborIds = source.omborIds.join(',');
   if (source.productId) params.productId = source.productId;
   if (source.status) params.status = source.status;
   if (source.truckNumber?.trim()) params.truckNumber = source.truckNumber.trim();
@@ -137,17 +138,11 @@ const getOmborchiFilterLabel = (tab) => {
   return 'Omborchi';
 };
 
-const getOmborFilterLabel = (tab) => {
-  if (tab === 'qabul') return 'Ombor (manzil)';
-  if (tab === 'kirimlar' || tab === 'chiqimlar') return 'Ombor (manba)';
-  return 'Ombor';
-};
-
 const emptyFilters = () => ({
   omborchiId: '',
   senderOmborchiId: '',
   recipientOmborId: '',
-  omborId: '',
+  omborIds: [],
   productId: '',
   status: '',
   truckNumber: '',
@@ -522,6 +517,11 @@ const Statistika = () => {
     setAppliedFilters(defaults);
   };
 
+  const handleOmborIdsChange = (nextIds) => {
+    setFilters((prev) => ({ ...prev, omborIds: nextIds, page: 1 }));
+    setAppliedFilters((prev) => ({ ...prev, omborIds: nextIds, page: 1 }));
+  };
+
   const handleTabChange = (tabId) => {
     setActiveTab(tabId);
     setAppliedFilters((prev) => ({ ...prev, page: 1 }));
@@ -576,126 +576,37 @@ const Statistika = () => {
         </p>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-2xl p-2 sm:p-3 shadow-sm">
-        <div className="flex items-center justify-between gap-3">
-          <div className="overflow-x-auto flex-1 min-w-0">
-            <div className="flex gap-1 min-w-max sm:min-w-0 sm:flex-wrap">
-              {TABS.map((tab) => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => handleTabChange(tab.id)}
-                  className={`px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
-                    activeTab === tab.id
-                      ? 'bg-indigo-600 text-white'
-                      : 'text-slate-600 hover:bg-slate-100'
-                  }`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={handleExport}
-              disabled={loading || exporting}
-              className="px-3 sm:px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 inline-flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <FileDownload sx={{ fontSize: 18 }} className={exporting ? 'animate-pulse' : ''} />
-              <span className="hidden sm:inline">Excel</span>
-            </button>
-            <button
-              type="button"
-              onClick={loadData}
-              disabled={loading || exporting}
-              className="px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2 disabled:opacity-50"
-            >
-              <Refresh sx={{ fontSize: 18 }} className={loading ? 'animate-spin' : ''} />
-              <span className="hidden sm:inline">Yangilash</span>
-            </button>
-          </div>
-        </div>
-        <p className="px-2 sm:px-3 pb-2 text-xs text-slate-500">{TAB_HINTS[activeTab]}</p>
-        {exportStatus && (
-          <div className="mx-2 sm:mx-3 mb-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-800 flex items-center gap-2">
-            <Refresh sx={{ fontSize: 16 }} className="animate-spin shrink-0" />
-            <span>Excel: {exportStatus.message}</span>
-          </div>
-        )}
-      </div>
-
-      {summary && (
-        <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-              <p className="text-sm text-slate-500">Jami yozuvlar</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-1">
-                {summary.totalCount?.toLocaleString('uz-UZ') ?? 0}
-              </p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-              <p className="text-sm text-slate-500">Sof og'irlik (tonna)</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-1">
-                {summary.totalNetWeightTon?.toLocaleString('uz-UZ') ?? 0}
-              </p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-              <p className="text-sm text-slate-500">Sof og'irlik (kg)</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-1">
-                {summary.totalNetWeightKg?.toLocaleString('uz-UZ') ?? 0}
-              </p>
-            </div>
-            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
-              <p className="text-sm text-slate-500">Umumiy og'irlik (kg)</p>
-              <p className="text-2xl font-semibold text-slate-900 mt-1">
-                {summary.totalGrossWeightKg?.toLocaleString('uz-UZ') ?? 0}
-              </p>
-            </div>
-          </div>
-
-          {summary.byType && BY_TYPE_ORDER.some((key) => summary.byType[key]) && (
-            <div>
-              <p className="text-sm font-medium text-slate-700 mb-3">
-                Turlar bo'yicha yig'indi
-                {activeTab !== 'all' && (
-                  <span className="font-normal text-slate-500"> — joriy tab turi bo'yicha</span>
-                )}
-              </p>
-              <div className={`grid grid-cols-1 gap-4 ${BY_TYPE_ORDER.filter((k) => summary.byType[k]).length > 1 ? 'sm:grid-cols-3' : 'sm:grid-cols-1 max-w-sm'}`}>
-                {BY_TYPE_ORDER.filter((key) => summary.byType[key]).map((key) => {
-                  const value = summary.byType[key];
-                  return (
-                    <div key={key} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
-                      <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-medium border ${typeBadgeClass(key)}`}>
-                        {typeLabel(key)}
-                      </span>
-                      <p className="text-xl font-semibold text-slate-900 mt-2">{value.count ?? 0} ta</p>
-                      <p className="text-sm text-slate-500 mt-1">
-                        {(value.netWeightKg ?? 0).toLocaleString('uz-UZ')} kg
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
       <div className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-        <button
-          type="button"
-          onClick={() => setShowFilters((prev) => !prev)}
-          className="w-full px-4 sm:px-5 py-4 flex items-center justify-between text-left hover:bg-slate-50 transition-colors"
-        >
-          <span className="inline-flex items-center gap-2 font-medium text-slate-800">
+        <div className="px-4 sm:px-5 py-4 flex flex-col lg:flex-row lg:items-end gap-3">
+          <div className="flex-1 min-w-0">
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+              Ombor bo&apos;yicha
+            </label>
+            <MultiSelect
+              value={appliedFilters.omborIds}
+              onChange={handleOmborIdsChange}
+              options={omborOptions}
+              placeholder="Barcha omborlar"
+              emptyText="Ombor topilmadi"
+              searchable
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => setShowFilters((prev) => !prev)}
+            className={`w-full lg:w-auto shrink-0 px-4 py-2.5 rounded-xl border inline-flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
+              showFilters
+                ? 'bg-indigo-600 text-white border-indigo-600'
+                : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+            }`}
+          >
             <FilterList sx={{ fontSize: 20 }} />
             Filtrlar
-          </span>
-          <span className="text-sm text-slate-500">{showFilters ? 'Yashirish' : "Ko'rsatish"}</span>
-        </button>
+            <span className={`text-xs ${showFilters ? 'text-indigo-100' : 'text-slate-500'}`}>
+              {showFilters ? 'Yashirish' : "Ko'rsatish"}
+            </span>
+          </button>
+        </div>
 
         {showFilters && (
           <div className="px-4 sm:px-5 pb-5 border-t border-slate-100">
@@ -795,17 +706,6 @@ const Statistika = () => {
                 <CustomSelect
                   value={filters.recipientOmborId}
                   onChange={(value) => updateFilter('recipientOmborId', value)}
-                  options={omborOptions}
-                  placeholder="Barchasi"
-                  emptyText="Ombor topilmadi"
-                  searchable
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">{getOmborFilterLabel(activeTab)}</label>
-                <CustomSelect
-                  value={filters.omborId}
-                  onChange={(value) => updateFilter('omborId', value)}
                   options={omborOptions}
                   placeholder="Barchasi"
                   emptyText="Ombor topilmadi"
@@ -940,6 +840,114 @@ const Statistika = () => {
           </div>
         )}
       </div>
+
+      <div className="bg-white border border-slate-200 rounded-2xl p-2 sm:p-3 shadow-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div className="overflow-x-auto flex-1 min-w-0">
+            <div className="flex gap-1 min-w-max sm:min-w-0 sm:flex-wrap">
+              {TABS.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTabChange(tab.id)}
+                  className={`px-3 sm:px-4 py-2 rounded-xl text-sm font-medium transition-colors whitespace-nowrap ${
+                    activeTab === tab.id
+                      ? 'bg-indigo-600 text-white'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={handleExport}
+              disabled={loading || exporting}
+              className="px-3 sm:px-4 py-2 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <FileDownload sx={{ fontSize: 18 }} className={exporting ? 'animate-pulse' : ''} />
+              <span className="hidden sm:inline">Excel</span>
+            </button>
+            <button
+              type="button"
+              onClick={loadData}
+              disabled={loading || exporting}
+              className="px-3 sm:px-4 py-2 rounded-xl border border-slate-200 text-slate-700 hover:bg-slate-50 inline-flex items-center justify-center gap-2 disabled:opacity-50"
+            >
+              <Refresh sx={{ fontSize: 18 }} className={loading ? 'animate-spin' : ''} />
+              <span className="hidden sm:inline">Yangilash</span>
+            </button>
+          </div>
+        </div>
+        <p className="px-2 sm:px-3 pb-2 text-xs text-slate-500">{TAB_HINTS[activeTab]}</p>
+        {exportStatus && (
+          <div className="mx-2 sm:mx-3 mb-2 px-3 py-2 rounded-xl bg-indigo-50 border border-indigo-100 text-sm text-indigo-800 flex items-center gap-2">
+            <Refresh sx={{ fontSize: 16 }} className="animate-spin shrink-0" />
+            <span>Excel: {exportStatus.message}</span>
+          </div>
+        )}
+      </div>
+
+      {summary && (
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Jami yozuvlar</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-1">
+                {summary.totalCount?.toLocaleString('uz-UZ') ?? 0}
+              </p>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Sof og'irlik (tonna)</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-1">
+                {summary.totalNetWeightTon?.toLocaleString('uz-UZ') ?? 0}
+              </p>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Sof og'irlik (kg)</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-1">
+                {summary.totalNetWeightKg?.toLocaleString('uz-UZ') ?? 0}
+              </p>
+            </div>
+            <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
+              <p className="text-sm text-slate-500">Umumiy og'irlik (kg)</p>
+              <p className="text-2xl font-semibold text-slate-900 mt-1">
+                {summary.totalGrossWeightKg?.toLocaleString('uz-UZ') ?? 0}
+              </p>
+            </div>
+          </div>
+
+          {summary.byType && BY_TYPE_ORDER.some((key) => summary.byType[key]) && (
+            <div>
+              <p className="text-sm font-medium text-slate-700 mb-3">
+                Turlar bo'yicha yig'indi
+                {activeTab !== 'all' && (
+                  <span className="font-normal text-slate-500"> — joriy tab turi bo'yicha</span>
+                )}
+              </p>
+              <div className={`grid grid-cols-1 gap-4 ${BY_TYPE_ORDER.filter((k) => summary.byType[k]).length > 1 ? 'sm:grid-cols-3' : 'sm:grid-cols-1 max-w-sm'}`}>
+                {BY_TYPE_ORDER.filter((key) => summary.byType[key]).map((key) => {
+                  const value = summary.byType[key];
+                  return (
+                    <div key={key} className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm">
+                      <span className={`inline-flex px-2 py-0.5 rounded-lg text-xs font-medium border ${typeBadgeClass(key)}`}>
+                        {typeLabel(key)}
+                      </span>
+                      <p className="text-xl font-semibold text-slate-900 mt-2">{value.count ?? 0} ta</p>
+                      <p className="text-sm text-slate-500 mt-1">
+                        {(value.netWeightKg ?? 0).toLocaleString('uz-UZ')} kg
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </>
+      )}
 
       <div className="bg-white border border-slate-200 rounded-2xl p-4 sm:p-5 shadow-sm">
         <div className="flex items-center justify-between gap-3 mb-4">

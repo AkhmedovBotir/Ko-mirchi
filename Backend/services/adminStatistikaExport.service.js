@@ -93,6 +93,16 @@ const formatOmborName = async (id) => {
   return ombor?.name || String(id);
 };
 
+const formatOmborNamesList = async (ids) => {
+  if (!ids?.length) {
+    return null;
+  }
+
+  const names = await Promise.all(ids.map((id) => formatOmborName(id)));
+  const filtered = names.filter(Boolean);
+  return filtered.length ? filtered.join(", ") : null;
+};
+
 const formatProductName = async (id) => {
   if (!id) {
     return null;
@@ -137,7 +147,9 @@ const buildFilterRows = async (scope, filters, rawFilters) => {
     formatOmborchiName(filters.omborchiId),
     formatOmborchiName(filters.senderOmborchiId),
     formatOmborName(filters.recipientOmborId),
-    formatOmborName(filters.omborId),
+    filters.omborIds?.length
+      ? formatOmborNamesList(filters.omborIds)
+      : formatOmborName(filters.omborId),
     formatProductName(filters.productId)
   ]);
 
